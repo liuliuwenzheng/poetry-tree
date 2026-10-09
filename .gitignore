@@ -1,0 +1,22 @@
+# 构建产物
+data/*.db
+data/*.db.gz
+data/*.db.zst
+data/rejects.json
+*.db-journal
+*.db-wal
+*.db-shm
+
+# 上游原始数据（自行按 docs/design.md 拉取）
+raw/
+*.csv
+*.jsonl
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+.idea/
+.vscode/
