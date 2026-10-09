@@ -588,13 +588,20 @@ class SqliteStore:
                 hits, total = self._search_like(term, script, q, limit, page)
                 return hits, total, False, (
                     f"检索词里有全文索引不接受的符号（{e}），已改用子串匹配；"
-                    f"结果同样完整，只是慢一些")
+                    f"结果同样完整，只是**按 id 排序、没有相关性排序**（score 为空）")
 
         reason = ("本库没有全文索引" if script not in self.caps.fts
                   else f"检索词只有 {len(term)} 个字，而全文索引按 3 字切分"
                        f"（trigram），少于 3 字匹配不到")
         hits, total = self._search_like(term, script, q, limit, page)
-        return hits, total, False, f"{reason}，已改用子串匹配；结果完整，只是慢一些"
+        # 降级路径用 LIKE，**没有相关性排序**（SQLite 的 LIKE 无评分函数），
+        # 结果按 id 排、score 为 None。这句必须写在 note 里：
+        # 调用方看到「第一条不是最相关的」时，得能立刻分清是「库/接口坏了」
+        # 还是「你走的是降级路径」。**降级可以，但不能降级得不知不觉。**
+        return hits, total, False, (
+            f"{reason}，已改用子串匹配；结果完整，只是慢一些。"
+            f"注意：此路径**按 id 排序、没有相关性排序**（score 为空），"
+            f"想要相关性排序请建全文索引（tools/build_search.py）")
 
     def _search_fts(self, term: str, script: str, q: PoemQuery,
                     limit: int, page: int) -> tuple[list[SearchHit], int]:
