@@ -66,28 +66,55 @@
 │   ├── sources/          # 各来源适配器（只接受已登记的授权）
 │   ├── normalize.py      # 统一 schema（原文/译文分离）
 │   └── build.py          # 构建 + 授权闸门
-├── api/                  # 开放接口（REST / GraphQL）
-├── sdk/                  # 客户端
+├── api/                  # 开放接口 ★
+│   ├── storage.py        #   领域层：模型 ↔ 数据库的唯一翻译点（REST/GraphQL 共用）
+│   ├── rights.py         #   授权层：与构建闸门读同一份 sources.json
+│   ├── rest.py           #   REST（/api/v1）
+│   ├── graphql_api.py    #   GraphQL（/graphql，带 GraphiQL 交互界面）
+│   └── serve.py          #   启动入口：python -m api.serve
+├── sdk/poetry_tree.py    # Python 客户端（零依赖，自动翻页）
+├── tests/test_api.py     # 接口测试（含架构不变量，不只是「能通」）
 └── cli/
 ```
 
 ## 快速开始
 
 ```bash
-python corpus/build.py --source chinese_poetry --check-only   # 只校验授权，不下载
-python corpus/build.py --all                                  # 构建（授权不全即中止）
+# ---- 一、构建/校验数据（授权闸门） ----
+python corpus/rights.py --selftest                            # 闸门自测 8/8
+python corpus/rights.py --check-source chinese_poetry         # 单来源授权核查
+
+# ---- 二、起接口 ----
+python -m api.serve --db "E:/AI-ku/项目/baichuan-poetry/data/baichuan.db"
+
+#   REST 文档  http://127.0.0.1:8710/docs
+#   GraphiQL   http://127.0.0.1:8710/graphql
+
+# ---- 三、跑接口测试（61 条断言，不需要先起服务）----
+python -m tests.test_api
 ```
+
+```bash
+curl "http://127.0.0.1:8710/api/v1/poems?genre=词&dynasty=宋&limit=3"   # 宋词
+curl "http://127.0.0.1:8710/api/v1/poems?genre=诗&dynasty=唐&limit=3"   # 唐诗
+curl "http://127.0.0.1:8710/api/v1/poems?genre=词&limit=3"              # 所有词，不分朝代
+curl "http://127.0.0.1:8710/api/v1/search?q=明月几时有"                  # 全文检索
+curl "http://127.0.0.1:8710/api/v1/authors/resolve?name=陶渊明"          # 别名 → 陶潜
+```
+
+**接口文档：[`docs/api.md`](docs/api.md)** —— 里面有设计决策备忘（为什么这么设计）。
 
 ## 路线图
 
 - [x] 定规矩：授权优先的数据模型（`docs/design.md`）
-- [ ] 授权闸门 + 来源登记表
-- [ ] 首批干净源：chinese-poetry (MIT)、Werneror (MIT)
+- [x] 授权闸门 + 来源登记表 —— fail-closed，`rights.py --selftest` 8/8
+- [x] 首批干净源：chinese-poetry (MIT)、Werneror (MIT)（经**百川**适配器入库）
+- [x] **REST / GraphQL 接口 + Python SDK**（`api/` + `sdk/`，见 `docs/api.md`）
 - [ ] 公有领域英诗：Project Gutenberg（莎士比亚、惠特曼、狄金森）
 - [ ] 公有领域老译本：Fitzgerald《鲁拜集》、Nicholson 鲁米
 - [ ] Wikisource (CC BY-SA) 多语校对文本
-- [ ] REST / GraphQL 接口 + SDK
 - [ ] 三语对照检索
+- [ ] 按授权过滤的对外数据导出（供无法履行 ShareAlike 的下游使用）
 
 ## 授权
 
