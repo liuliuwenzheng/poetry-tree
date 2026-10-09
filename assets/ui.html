@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>诗文树 · 翻诗</title>
+<style>
+  :root{
+    --bg:#faf7f2; --card:#fff; --ink:#2b2620; --muted:#8a8178; --line:#e6ded2;
+    --accent:#9a3412; --accent-soft:#fdf0e7; --ok:#166534; --warn:#92400e;
+    --poem:#1f1b16;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#16140f; --card:#1e1b16; --ink:#eae3d8; --muted:#9a9086; --line:#332e26;
+      --accent:#e8a06a; --accent-soft:#2a2118; --ok:#7ec894; --warn:#e0b070;
+      --poem:#f0e9de;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.7 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:22px 18px 60px}
+
+  header{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:18px}
+  h1{font-size:22px; margin:0; letter-spacing:.08em; font-weight:600}
+  h1 small{font-weight:400; color:var(--muted); font-size:13px; letter-spacing:0; margin-left:8px}
+  .stat{margin-left:auto; color:var(--muted); font-size:13px}
+  .toggle{border:1px solid var(--line); background:var(--card); color:var(--ink);
+    border-radius:999px; padding:3px 12px; cursor:pointer; font-size:13px}
+
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px}
+  .search{display:flex; gap:8px}
+  input[type=text], select{
+    font:inherit; color:var(--ink); background:var(--bg);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; min-width:0;
+  }
+  input[type=text]{flex:1}
+  button.go{
+    font:inherit; font-weight:600; cursor:pointer; border:0; border-radius:8px;
+    padding:8px 18px; background:var(--accent); color:#fff;
+  }
+  button.ghost{
+    font:inherit; cursor:pointer; background:transparent; color:var(--muted);
+    border:1px solid var(--line); border-radius:8px; padding:7px 12px;
+  }
+  .filters{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center}
+  .filters select, .filters input{max-width:190px}
+
+  .badges{display:flex; gap:8px; align-items:center; margin:14px 2px 6px; font-size:12.5px; color:var(--muted)}
+  .chip{background:var(--accent-soft); color:var(--accent); border-radius:999px; padding:2px 10px}
+  .chip.gray{background:transparent; border:1px solid var(--line); color:var(--muted)}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; margin-bottom:10px; cursor:pointer}
+  .card:hover{border-color:var(--accent)}
+  .t{font-size:17px; font-weight:600; letter-spacing:.02em}
+  .m{color:var(--muted); font-size:13px; margin-top:3px}
+  .m b{color:var(--ink); font-weight:500}
+  .poem{font-family:"Songti SC","SimSun",Georgia,serif; font-size:17.5px; line-height:2;
+    color:var(--poem); margin:12px 0 4px; padding-left:2px; white-space:pre-wrap}
+  .rights{margin-top:12px; padding-top:10px; border-top:1px dashed var(--line);
+    font-size:12.5px; color:var(--muted)}
+  .rights a{color:var(--accent)}
+  .hidden{display:none}
+  .more{display:flex; justify-content:center; margin-top:16px}
+  .empty{color:var(--muted); text-align:center; padding:34px 10px}
+
+  .err{background:var(--accent-soft); border:1px solid var(--accent); border-radius:12px;
+    padding:14px 16px; margin:14px 0}
+  .err .code{font-family:ui-monospace,Consolas,monospace; font-size:12.5px; color:var(--accent)}
+  .err .msg{font-weight:600; margin:4px 0 6px}
+  .err .hint{font-size:13px; color:var(--muted)}
+  .err ul{margin:6px 0 0 18px; padding:0; font-size:13px; color:var(--muted)}
+
+  .loading{color:var(--muted); text-align:center; padding:20px}
+  footer{margin-top:30px; color:var(--muted); font-size:12.5px; text-align:center; line-height:1.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>诗文树<small>翻诗</small></h1>
+    <button class="toggle" id="scriptBtn" title="切换简体 / 繁体">简</button>
+    <div class="stat" id="stat">载入中…</div>
+  </header>
+
+  <div class="panel">
+    <div class="search">
+      <input type="text" id="q" placeholder="搜诗句、诗题……（3 字以上走全文索引，2 字走子串）" autocomplete="off">
+      <button class="go" id="doSearch">检索</button>
+      <button class="ghost" id="doRandom" title="按当前筛选随机来一首">随机一首</button>
+    </div>
+    <div class="filters">
+      <select id="dynasty"><option value="">所有朝代</option></select>
+      <select id="genre"><option value="">所有体裁</option></select>
+      <select id="form"><option value="">所有形式</option></select>
+      <input type="text" id="tune" list="tuneList" placeholder="词牌／曲牌，如 水调歌头">
+      <datalist id="tuneList"></datalist>
+      <input type="text" id="author" placeholder="作者（可写别称，如 陶渊明）">
+      <button class="ghost" id="doClear">清空</button>
+    </div>
+  </div>
+
+  <div id="metaErr"></div>
+  <div class="badges" id="badges"></div>
+  <div id="err"></div>
+  <div id="list"></div>
+  <div class="more" id="more"></div>
+
+  <footer>
+    数据 <span id="srcTotal">—</span> 首，来源与许可见每条下方的授权块。<br>
+    本页调的是本机接口 <code id="apiBase">—</code>；接口只读，且启动时审计每个来源的授权。
+  </footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const API = '';                       // 同源
+let S = { script:'zh-Hans', cursor:null, mode:'list', lastTotal:0, expand:false };
+
+function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function api(path, params){
+  const u = new URL(path, location.origin);
+  for (const [k,v] of Object.entries(params || {})) if (v !== '' && v != null) u.searchParams.set(k,v);
+  const r = await fetch(u);
+  let j = {}; try { j = await r.json(); } catch(e){}
+  if (!r.ok) { const e = j.error || {code:'http_'+r.status, message:'请求失败'}; e._status = r.status; throw e; }
+  return j;
+}
+
+// ---- 筛选参数 ----
+function filters(){
+  return {
+    script: S.script,
+    dynasty: $('#dynasty').value,
+    genre: $('#genre').value,
+    form: $('#form').value,
+    tune: $('#tune').value.trim(),
+    author: $('#author').value.trim(),
+  };
+}
+const hasFilter = f => !!(f.dynasty||f.genre||f.form||f.tune||f.author);
+
+// ---- URL 同步：状态可分享（/ui?q=明月&genre=词&script=zh-Hant）----
+function readUrl(){
+  const p = new URLSearchParams(location.search);
+  if (p.get('script') === 'zh-Hant'){ S.script = 'zh-Hant'; $('#scriptBtn').textContent = '繁'; }
+  S.expand = !!p.get('expand');            // ?expand=1 默认展开诗句（便于通读/打印）
+  $('#q').value = p.get('q') || '';
+  const put = (sel, key) => { const v = p.get(key); if (v) $(sel).value = v; };
+  put('#dynasty','dynasty'); put('#genre','genre'); put('#form','form');
+  if (p.get('tune')) $('#tune').value = p.get('tune');
+  if (p.get('author')) $('#author').value = p.get('author');
+}
+function writeUrl(){
+  const p = new URLSearchParams();
+  const q = $('#q').value.trim(); if (q) p.set('q', q);
+  const f = filters();
+  for (const k of ['dynasty','genre','form','tune','author']) if (f[k]) p.set(k, f[k]);
+  if (S.script === 'zh-Hant') p.set('script', 'zh-Hant');
+  history.replaceState(null, '', p.toString() ? location.pathname+'?'+p : location.pathname);
+}
+
+// ---- 渲染 ----
+function poemCard(p){
+  const bits = [];
+  if (p.author?.name) bits.push('<b>'+esc(p.author.name)+'</b>');
+  if (p.dynasty?.name) bits.push(esc(p.dynasty.name));
+  if (p.genre?.name) bits.push(esc(p.genre.name));
+  if (p.form?.name && p.form.name !== p.genre?.name) bits.push(esc(p.form.name));
+  if (p.tune) bits.push('「'+esc(p.tune)+'」');
+  const r = p.rights || {};
+  const rbits = [];
+  if (r.source_name) rbits.push('来源 '+esc(r.source_name));
+  if (r.license) rbits.push('许可 '+esc(r.license));
+  if (r.license_url) rbits.push('<a href="'+esc(r.license_url)+'" target="_blank" rel="noopener">许可原文</a>');
+  if (r.attribution_required) rbits.push('需署名');
+  const lines = Array.isArray(p.content) ? p.content : [];
+  return '<div class="card" data-id="'+p.id+'">'
+    + '<div class="t">'+esc(p.title || '（无题）')+'</div>'
+    + '<div class="m">'+bits.join(' · ')+' · #'+p.id+'</div>'
+    + '<div class="poem hidden">'+lines.map(esc).join('\n')+'</div>'
+    + '<div class="rights hidden">'+rbits.join(' · ')+'</div>'
+    + '</div>';
+}
+
+function showErr(e){
+  let h = '<div class="err"><div class="code">'+esc(e.code||'error')+(e._status?' · HTTP '+e._status:'')+'</div>'
+        + '<div class="msg">'+esc(e.message||'出错了')+'</div>';
+  if (e.hint) h += '<div class="hint">'+esc(e.hint)+'</div>';
+  if (Array.isArray(e.valid) && e.valid.length)
+    h += '<div class="hint">可选值：</div><ul>'+e.valid.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>';
+  $('#err').innerHTML = h + '</div>';
+  $('#list').innerHTML = '';
+}
+const clearErr = () => { $('#err').innerHTML = ''; };
+
+function setBadges(html){ $('#badges').innerHTML = html || ''; }
+
+// ---- 主流程 ----
+async function run(append){
+  const q = $('#q').value.trim();
+  const f = filters();
+  if (!append) writeUrl();               // 状态进 URL，随时可分享/收藏
+  if (!append){
+    S.cursor = null; S.mode = q ? 'search' : 'list';
+    $('#list').innerHTML = '<div class="loading">载入中…</div>';
+    clearErr(); setBadges('');
+  } else {
+    $('#more').innerHTML = '<div class="loading">载入更多…</div>';
+  }
+  try{
+    let data, badges = '';
+    if (S.mode === 'search'){
+      const lim = 50;                       // 服务端 search_page_max
+      data = await api('/api/v1/search', { q, limit: lim, ...f });
+      const eng = (data.engine === 'fts5-bm25')
+        ? '<span class="chip">全文索引 fts5-bm25</span>'
+        : '<span class="chip gray">'+esc(data.engine || '子串匹配')+'</span>';
+      badges = eng + '<span>命中 '+data.total.toLocaleString()+' 条</span>';
+      if (data.note) badges += '<span title="'+esc(data.note)+'">ⓘ '+esc(data.note.slice(0,42))+'…</span>';
+      if (data.total > lim) badges += '<span>· 只显示前 '+lim+' 条，加筛选条件可缩小范围</span>';
+      append = false;                       // 检索不分页，避免 offset 上限
+    } else {
+      data = await api('/api/v1/poems', { ...f, limit: 20, after: append ? S.cursor : '' });
+      badges = '<span>共 '+data.total.toLocaleString()+' 首</span>'
+             + (hasFilter(f) ? '<span class="chip gray">已按 '+[f.dynasty,f.genre,f.form,f.tune,f.author].filter(Boolean).join(' · ')+' 筛选</span>' : '');
+    }
+    if (!append){ setBadges(badges); $('#list').innerHTML = ''; }
+    if (!data.items || !data.items.length){
+      if (!append) $('#list').innerHTML = '<div class="empty">没有符合条件的作品</div>';
+      $('#more').innerHTML = '';
+      return;
+    }
+    $('#list').insertAdjacentHTML('beforeend', data.items.map(x => poemCard(x.poem || x)).join(''));
+    if (S.expand) $('#list').querySelectorAll('.poem.hidden, .rights.hidden')
+      .forEach(el => el.classList.remove('hidden'));
+    S.cursor = data.next_cursor || null;
+    S.lastTotal = data.total;
+    $('#more').innerHTML = (S.mode === 'list' && data.has_more)
+      ? '<button class="ghost" id="moreBtn">加载更多（还有 '+(data.total - $('#list').children.length).toLocaleString()+' 首）</button>'
+      : '';
+  }catch(e){ showErr(e); $('#more').innerHTML = ''; }
+}
+
+async function randomOne(){
+  const f = filters();
+  try{
+    clearErr();
+    const p = await api('/api/v1/poems/random', f);
+    $('#list').innerHTML = poemCard(p) + $('#list').innerHTML;
+    const c = $('#list').firstElementChild;
+    c.querySelector('.poem').classList.remove('hidden');
+    c.querySelector('.rights').classList.remove('hidden');
+    c.scrollIntoView({block:'center', behavior:'smooth'});
+    setBadges('<span class="chip">随机一首</span>' + (hasFilter(f) ? '<span class="chip gray">在筛选范围内</span>' : ''));
+  }catch(e){ showErr(e); }
+}
+
+// ---- 元数据 ----
+async function meta(){
+  const sc = { script: S.script };
+  // 用 allSettled：任何一个元数据接口挂了，其余筛选器照样能用。
+  // limit 1000 是服务端上限（超了会 400），词牌按出现次数降序，够用。
+  const r = await Promise.allSettled([
+    api('/api/v1/meta/stats', sc), api('/api/v1/meta/dynasties', sc),
+    api('/api/v1/meta/genres', sc), api('/api/v1/meta/forms', sc),
+    api('/api/v1/meta/tunes', {...sc, limit: 1000}),
+  ]);
+  const names = ['统计','朝代','体裁','形式','词牌'];
+  const [st, dy, ge, fo, tu] = r.map(x => x.status === 'fulfilled' ? x.value : null);
+  const bad = names.filter((_, i) => r[i].status !== 'fulfilled');
+
+  if (st){
+    $('#stat').textContent = st.poems.toLocaleString()+' 首 · '+st.authors.toLocaleString()+' 位作者';
+    $('#srcTotal').textContent = st.poems.toLocaleString();
+  }
+  const fill = (sel, items, label, val) => {
+    const keep = sel.value;
+    sel.innerHTML = '<option value="">'+label+'</option>' +
+      items.map(i => '<option value="'+esc(val(i))+'">'+esc(val(i))+(i.poem_count?'（'+i.poem_count.toLocaleString()+'）':'')+'</option>').join('');
+    if ([...sel.options].some(o=>o.value===keep)) sel.value = keep;
+  };
+  if (dy) fill($('#dynasty'), dy.items, '所有朝代', i=>i.name);
+  if (ge) fill($('#genre'),   ge.items, '所有体裁', i=>i.name);
+  if (fo) fill($('#form'),    fo.items, '所有形式', i=>i.name);
+  if (tu) $('#tuneList').innerHTML = (tu.items||[]).map(i=>'<option value="'+esc(i.name)+'">'+esc(i.genre||'')+' '+i.count+'</option>').join('');
+
+  // 失败的必须显式说 —— 否则用户只看到「下拉框是空的」，
+  // 会以为库里就没有那些朝代。**悄悄少几个筛选器和撒谎没区别。**
+  const first = r.find(x => x.status === 'rejected');
+  $('#metaErr').innerHTML = bad.length
+    ? '<div class="err" style="margin-top:8px"><div class="msg">筛选器有部分没能加载：'+bad.join('、')+'</div>'
+      + '<div class="hint">'+esc(first?.reason?.message || '')+'（其余功能不受影响）</div></div>'
+    : '';
+}
+
+// ---- 事件 ----
+$('#doSearch').onclick = () => run(false);
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') run(false); });
+$('#doRandom').onclick = randomOne;
+$('#doClear').onclick = () => {
+  ['#q','#dynasty','#genre','#form','#tune','#author'].forEach(s => $(s).value = '');
+  run(false);
+};
+['#dynasty','#genre','#form'].forEach(s => $(s).addEventListener('change', () => run(false)));
+['#tune','#author'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') run(false); }));
+$('#more').addEventListener('click', e => { if (e.target.id === 'moreBtn') run(true); });
+$('#list').addEventListener('click', e => {
+  const c = e.target.closest('.card'); if (!c) return;
+  c.querySelector('.poem').classList.toggle('hidden');
+  c.querySelector('.rights').classList.toggle('hidden');
+});
+$('#scriptBtn').onclick = () => {
+  const hant = S.script === 'zh-Hant';
+  S.script = hant ? 'zh-Hans' : 'zh-Hant';
+  $('#scriptBtn').textContent = hant ? '简' : '繁';
+  meta(); run(false);
+};
+$('#apiBase').textContent = location.origin + '/api/v1';
+
+meta().then(() => { readUrl(); run(false); });
+</script>
+</body>
+</html>

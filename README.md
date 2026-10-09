@@ -97,7 +97,8 @@ python corpus/rights.py --check-source chinese_poetry         # 单来源授权�
 # ---- 三、起接口 ----
 python -m api.serve --db "path/to/baichuan.db"
 
-#   REST 文档  http://127.0.0.1:8710/docs
+#   翻诗界面   http://127.0.0.1:8710/ui        ← 人看这个（按朝代/体裁/词牌筛、检索、随机、简繁）
+#   REST 文档  http://127.0.0.1:8710/docs      ← 开发者看这个（Swagger）
 #   GraphiQL   http://127.0.0.1:8710/graphql
 #   健康检查   http://127.0.0.1:8710/api/v1/healthz
 #   要让局域网内的别人访问，加 --host 0.0.0.0

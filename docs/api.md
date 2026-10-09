@@ -119,10 +119,16 @@ python -m api.serve --db "E:/AI-ku/项目/baichuan-poetry/data/baichuan.db" \
 
 | 地址 | 用途 |
 |---|---|
+| `http://127.0.0.1:8710/ui` | **翻诗界面**（给人用的：按朝代/体裁/形式/词牌筛选、检索、随机一首、简繁切换、加载更多；状态写在 URL 里，可以直接把链接发给别人） |
 | `http://127.0.0.1:8710/docs` | **REST 交互文档**（Swagger UI，能直接点着试） |
 | `http://127.0.0.1:8710/graphql` | **GraphiQL**（能看见 schema、勾字段、导 SDL） |
 | `http://127.0.0.1:8710/api/v1/` | 服务信息（第一原则、能力清单、端点索引） |
 | `http://127.0.0.1:8710/api/v1/healthz` | 健康检查 |
+
+根地址 `/` 直接把人送到 `/ui` —— 人打开一个诗歌服务，想看的是诗，不是 JSON。
+
+> 界面的查询参数可以写在 URL 上，因此**能分享**：
+> `/ui?q=明月几时有`、`/ui?genre=词&dynasty=宋`、`/ui?script=zh-Hant`、`/ui?expand=1`（展开全部诗句，便于通读或打印）。
 
 数据库从
 [baichuan-poetry Releases](https://github.com/liuliuwenzheng/baichuan-poetry/releases)

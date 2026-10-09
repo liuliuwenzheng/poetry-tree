@@ -11,11 +11,12 @@
 """
 import os
 import sys
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.config import Settings
@@ -57,6 +58,11 @@ def _err(code: str, message: str, hint: str | None = None, status: int = 400):
     if hint:
         body["hint"] = hint
     return JSONResponse(status_code=status, content={"error": body})
+
+
+# 翻诗界面（单文件、零依赖，由本服务自己伺服）。
+# 装在仓库的 assets/ 下 —— 它是给人看的，和接口的 JSON 各走各的门。
+UI_FILE = Path(__file__).resolve().parent.parent / "assets" / "ui.html"
 
 
 def create_app(settings: Settings | None = None, *, auto_audit: bool = True) -> FastAPI:
@@ -165,7 +171,15 @@ def create_app(settings: Settings | None = None, *, auto_audit: bool = True) -> 
     # ---------------------------------------------------------- 路由
     @app.get("/", include_in_schema=False)
     async def _index():
-        return RedirectResponse("/api/v1/")
+        # 人打开根地址想看的是「能翻诗的界面」，不是 JSON。
+        # 接口的门面仍然是 /api/v1/。
+        return RedirectResponse("/ui")
+
+    @app.get("/ui", include_in_schema=False)
+    async def _ui():
+        if not UI_FILE.exists():
+            return _err("not_found", "界面文件缺失", "仓库里应有 assets/ui.html", 404)
+        return FileResponse(UI_FILE, media_type="text/html; charset=utf-8")
 
     app.include_router(make_router(store, settings))
     app.include_router(make_graphql_router(store, settings), prefix="/graphql",

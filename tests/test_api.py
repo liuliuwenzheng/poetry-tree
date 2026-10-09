@@ -319,6 +319,16 @@ def main(argv=None):
           "请求体不是 UTF-8 → 400 且给人话（不是 Python 裸编解码错误）",
           j.get("message", "")[:26])
 
+    # ---- 翻诗界面（给人看的那一页，不是给开发者看的 Swagger）----
+    r = c.get("/ui")
+    check(r.status_code == 200 and "text/html" in r.headers.get("content-type", ""),
+          "/ui 翻诗界面可访问（text/html）")
+    check("诗文树" in r.text and "meta/tunes" in r.text,
+          "    界面不是空壳（有标题、也真的接了接口）")
+    r = c.get("/", follow_redirects=False)
+    check(r.status_code in (301, 302, 307, 308) and r.headers.get("location") == "/ui",
+          "根地址把人送到界面（人想看的是诗，不是 JSON）", r.headers.get("location"))
+
     # ============================================================ C GraphQL
     print("\nC. GraphQL（必须和 REST 答得一样）")
 
