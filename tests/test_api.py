@@ -17,6 +17,7 @@
    - REST 与 GraphQL **答得一样**（两个协议共用 storage，不能各说各话）
    - 别名：搜「陶渊明」要能命中「陶潜」
 """
+import argparse
 import os
 import sys
 
@@ -37,8 +38,22 @@ def check(cond, label, detail=""):
     return cond
 
 
-def main():
-    settings = Settings()
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="诗文树接口测试")
+    ap.add_argument("--db", default=None,
+                    help="要测的库（默认用 Settings 的默认值）。"
+                         "换库测很有用：比如用「没建全文索引的发布包」跑一遍，"
+                         "确认降级路径真的走通。")
+    ap.add_argument("--sources", default=None, help="来源登记表路径")
+    ap.add_argument("-q", "--quiet", action="store_true", help="只打结论")
+    a = ap.parse_args(argv)
+
+    kw = {}
+    if a.db:
+        kw["db"] = a.db
+    if a.sources:
+        kw["sources_json"] = a.sources
+    settings = Settings(**kw)
     if not os.path.exists(settings.db):
         sys.exit(f"找不到库：{settings.db}")
     app = create_app(settings, auto_audit=False)
@@ -327,9 +342,9 @@ def main():
 
 
 def test_api():
-    """给 pytest 用的入口。"""
+    """给 pytest 用的入口。**必须传空 argv** —— 否则 pytest 自己的参数会被 argparse 吃掉。"""
     try:
-        main()
+        main([])
     except SystemExit as e:
         assert e.code == 0, "接口测试有失败项"
 
