@@ -8,12 +8,43 @@
     "所以本表强制要求：必须有人真的打开过授权原文，并记录读到的是什么、哪天读的。",
     "'我记得好像是 MIT' 不算证据。"
   ],
-  "schema_version": 1,
+  "schema_version": 2,
+
+  "_policy": {
+    "title": "授权政策（先读这个，它决定数据模型和接口形状）",
+    "rules": [
+      "① 授权不明 = 不收。说不清来源与许可的文本，即使文学价值再高也不进库。",
+      "② 逐条权利块：每段文本（原文、译文各自独立）在库里都带自己的来源 URL、许可、",
+      "   权利人、公有领域依据与核实日期。字段非空，否则构建失败。",
+      "③ 译文与原文同权：译者版权独立于原作者。原诗是公有领域 ≠ 译本可自由使用。",
+      "④ 本库是「汇集（collection）」而非任何单一来源的衍生作品：各条文本保留各自许可，",
+      "   库整体不覆盖、不替代各条的许可。"
+    ],
+    "share_alike_handling": [
+      "CC-BY-SA 内容（如 Wikisource）引入后的义务：署名 + 以兼容许可发布该条衍生材料。",
+      "本项目的处理办法：",
+      "  - 只做『复制』（不改编文本），因此该条记录按 CC-BY-SA 4.0 单独授权；",
+      "  - 逐条在 rights 块里记 license=CC-BY-SA-4.0 与 attribution（含来源页 URL）；",
+      "  - **接口必须能按 license 过滤**，让无法履行 ShareAlike 的下游用户能排除这些记录。",
+      "这是把 ShareAlike 隔离在条目层、而不污染整个数据集的关键设计。"
+    ],
+    "per_item_verification": [
+      "PD-US 类来源（如 Project Gutenberg）声明的是『几乎所有作品都在美国公有领域』——",
+      "『几乎』意味着必须逐条核对版权页，不能因为来源可信就整批放行。",
+      "登记项里用 per_item_check_required 标记这类来源。"
+    ],
+    "prohibited": [
+      "fair-use（合理使用）内容 —— Wikisource 明文禁止，我们同样不收。",
+      "非商业许可（NC）内容 —— 会让整个库无法商用，与开放目标冲突。",
+      "来源不明或被机器批量替换过用词的文本（见百川的「海記憶體」勘误教训）。"
+    ]
+  },
 
   "sources": {
     "chinese_poetry": {
       "name": "chinese-poetry",
       "homepage": "https://github.com/chinese-poetry/chinese-poetry",
+      "language": ["zh-Hans", "zh-Hant"],
       "license": "MIT",
       "license_url": "https://raw.githubusercontent.com/chinese-poetry/chinese-poetry/master/LICENSE",
       "license_text_head": "The MIT License (MIT)\n\nCopyright (c) 2016 JackeyGao",
@@ -24,13 +55,15 @@
       "attribution_required": true,
       "commercial_ok": true,
       "share_alike": false,
+      "per_item_check_required": false,
       "roles": ["original_text"],
-      "notes": "古代诗歌文本本身属公有领域；该项目的整理、标点、结构化成果以 MIT 授权。再分发须保留其版权声明。"
+      "notes": "古代诗歌文本本身属公有领域；该项目的整理、标点、结构化成果以 MIT 授权。再分发须保留其版权声明。已实测：源码简繁混杂（全唐诗是繁体、宋词是简体），须双向归一。"
     },
 
     "werneror_poetry": {
       "name": "Werneror/Poetry",
       "homepage": "https://github.com/Werneror/Poetry",
+      "language": ["zh-Hans"],
       "license": "MIT",
       "license_url": "https://raw.githubusercontent.com/Werneror/Poetry/master/LICENSE",
       "license_text_head": "MIT License\n\nCopyright (c) 2018 Werner",
@@ -41,45 +74,53 @@
       "attribution_required": true,
       "commercial_ok": true,
       "share_alike": false,
+      "per_item_check_required": false,
       "roles": ["original_text"],
-      "notes": "先秦至当代中国诗歌。再分发须保留其版权声明。"
+      "notes": "先秦至当代中国诗歌。再分发须保留其版权声明。已实测：CSV 内容为整首连排字符串，须按句末标点切成一联一段才能与上游段落粒度对齐（否则跨源去重失效）。"
     },
 
     "gutenberg": {
       "name": "Project Gutenberg",
       "homepage": "https://www.gutenberg.org",
+      "language": ["en", "fr", "de", "ru", "es", "it"],
       "license": "PD-US",
       "license_url": "https://www.gutenberg.org/policy/license.html",
+      "license_text_head": "Nearly all the individual works in the collection are in the public domain in the United States.",
       "rights_holder": "various (per item)",
-      "license_checked": false,
-      "checked_on": null,
-      "checked_evidence": null,
+      "license_checked": true,
+      "checked_on": "2026-10-09",
+      "checked_evidence": "拉取 /policy/license.html 原文，读到：'Nearly all the individual works in the collection are in the public domain in the United States.'；'This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever.'；另读到商标条款与『You may still distribute the ebooks if you strip the Project Gutenberg license and all references to Project Gutenberg.』",
       "attribution_required": false,
       "commercial_ok": true,
       "share_alike": false,
+      "per_item_check_required": true,
       "roles": ["original_text", "translation"],
-      "notes": "计划中的首批公有领域英诗来源。注意：① 须逐条核对该电子书的版权页；② Gutenberg 商标条款约束的是商标，不是文本；③ 若文本含他人撰写的现代导言/注释，那部分另有版权，须剔除。license_checked 置 false —— 未核实前不允许构建。"
+      "notes": "条款原文说的是『几乎（nearly）所有』作品在美国属公有领域 —— 所以必须逐条核对电子书版权页，不能整批放行。三条边界：① Gutenberg 的商标条款约束的是名字而非文本，我们只做来源指认、不宣称其背书；② 现代编者撰写的导言/注释另有版权，必须剔除，只取诗歌正文本身；③ 译文按译者卒年单独判（见百川那批教训）。"
     },
 
     "wikisource": {
       "name": "Wikisource",
       "homepage": "https://wikisource.org",
+      "language": ["mul"],
       "license": "CC-BY-SA-4.0",
       "license_url": "https://wikisource.org/wiki/Wikisource:Copyright",
+      "license_text_head": "All works on Wikisource must be in the public domain or released under the Creative Commons Attribution-ShareAlike 4.0 Unported License (CC-BY-SA).",
       "rights_holder": "Wikisource contributors",
-      "license_checked": false,
-      "checked_on": null,
-      "checked_evidence": null,
+      "license_checked": true,
+      "checked_on": "2026-10-09",
+      "checked_evidence": "拉取 Wikisource:Copyright 原文，读到：'All works on Wikisource must be in the public domain or released under the Creative Commons Attribution-ShareAlike 4.0 Unported License (CC-BY-SA).'；编辑器可版权贡献须双重许可以 GFDL；站内明文禁止 fair-use 与非商业许可。",
       "attribution_required": true,
       "commercial_ok": true,
       "share_alike": true,
+      "per_item_check_required": true,
       "roles": ["original_text", "translation"],
-      "notes": "同协议共享（ShareAlike）：衍生作品必须同样以 CC BY-SA 发布。引入前须确认本项目整体授权策略兼容，并保留编辑历史作为署名。license_checked 置 false —— 未核实前不允许构建。"
+      "notes": "两类内容要分开看：① 公有领域的原文（可直接用）；② 编者自作或转载的译文（CC-BY-SA，须署名 + 相同方式共享）。站内还有『仅在美国属公有领域』的条目，须逐条判。按 _policy.share_alike_handling 处理：逐条授权、逐条署名，并让接口支持按 license 过滤。"
     },
 
     "palemoky_chinese_poetry_api": {
       "name": "palemoky/chinese-poetry-api（诗泉）",
       "homepage": "https://github.com/palemoky/chinese-poetry-api",
+      "language": ["zh-Hans", "zh-Hant"],
       "license": "GPL-3.0",
       "license_url": "https://raw.githubusercontent.com/palemoky/chinese-poetry-api/main/LICENSE",
       "license_text_head": "GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007",
@@ -90,10 +131,21 @@
       "attribution_required": true,
       "commercial_ok": true,
       "share_alike": true,
+      "per_item_check_required": false,
       "roles": [],
       "blocked": true,
       "blocked_reason": "GPL-3.0。其 poetry.db 数据包是 GPL 项目的 dist 产物，GPL 对「程序输出」的适用性有争议。本项目为规避风险，不使用其任何产物；唐宋数据改从 chinese_poetry(MIT) 原始 JSON 构建。保留此条目是为了留下决策记录，防止将来有人又想图省事直接拿它。",
       "notes": "★ 这就是那条教训：想当然以为上游是 MIT，实际是 GPL-3.0。"
     }
+  },
+
+  "_roadmap": {
+    "note": "待核实来源（未读过授权原文，一律不用）。此处只登记候选，不预填许可 —— 预填就是猜。",
+    "candidates": [
+      {"id": "perseus", "name": "Perseus Digital Library", "language": ["grc", "lat"], "license": null, "license_checked": false, "why": "希腊/拉丁古典诗歌原文，多语言版图的关键一块"},
+      {"id": "standard_ebooks", "name": "Standard Ebooks", "language": ["en"], "license": null, "license_checked": false, "why": "美国公有领域作品的精校版，正文质量高"},
+      {"id": "aozora", "name": "青空文庫 Aozora Bunko", "language": ["ja"], "license": null, "license_checked": false, "why": "日本公有领域文学；和歌、俳句的原文可在此找"},
+      {"id": "wikidata", "name": "Wikidata", "language": ["mul"], "license": null, "license_checked": false, "why": "作者生卒年、作品元数据（CC0 候选），可用来机械判定译者保护期"}
+    ]
   }
 }

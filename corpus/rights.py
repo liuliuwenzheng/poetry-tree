@@ -160,12 +160,12 @@ def validate_rights(rec: dict, sources: dict) -> list[str]:
 # ---------------------------------------------------------------- 自测
 CASES = [
     # (名称, 记录, 期望通过?, 期望命中的关键词)
-    ("① 正常：唐代诗，MIT 来源", {
-        "source_id": "chinese_poetry",
-        "source_url": "https://github.com/chinese-poetry/chinese-poetry/blob/master/全唐诗/poet.tang.0.json",
+    ("① 通过：唐代诗，MIT 来源已核实", {
+        "source_id": "mit_test_source",
+        "source_url": "https://example.org/tang.json",
         "retrieved_on": "2026-10-09", "license": "MIT",
-        "rights_holder": "JackeyGao and contributors",
-        "evidence_url": "https://github.com/chinese-poetry/chinese-poetry/blob/master/LICENSE",
+        "rights_holder": "Test Rights Holder",
+        "evidence_url": "https://example.org/LICENSE",
         "verified_by": "poetry-tree",
     }, True, ""),
 
@@ -176,10 +176,10 @@ CASES = [
     }, False, "未在 licenses/sources.json 登记"),
 
     ("③ 拦：来源未核实授权（license_checked=false）", {
-        "source_id": "gutenberg", "source_url": "https://www.gutenberg.org/ebooks/1041",
+        "source_id": "unverified_test_source", "source_url": "https://example.org/poem",
         "retrieved_on": "2026-10-09", "license": "PD-US",
-        "rights_holder": "William Shakespeare",
-        "evidence_url": "https://www.gutenberg.org/policy/license.html",
+        "rights_holder": "Some Author",
+        "evidence_url": "https://example.org/copyright",
         "verified_by": "poetry-tree",
     }, False, "license_checked"),
 
@@ -192,15 +192,15 @@ CASES = [
     }, False, "未给 pd_basis"),
 
     ("⑤ 拦：GPL-3.0 来源（已标记禁用）", {
-        "source_id": "palemoky_chinese_poetry_api",
-        "source_url": "https://github.com/palemoky/chinese-poetry-api/releases/download/v0.6.0/poetry.db.gz",
+        "source_id": "blocked_test_source",
+        "source_url": "https://example.org/gpl-artifact.db",
         "retrieved_on": "2026-10-09", "license": "GPL-3.0",
-        "rights_holder": "palemoky",
-        "evidence_url": "https://github.com/palemoky/chinese-poetry-api/blob/main/LICENSE",
+        "rights_holder": "someone",
+        "evidence_url": "https://example.org/LICENSE",
         "verified_by": "poetry-tree",
     }, False, "已被标记禁用"),
 
-    ("⑥ 拦：PD 依据不成立（出版年超门槛 1930）", {
+    ("⑥ 拦：PD 依据不成立（出版年超门槛）", {
         "source_id": "pd_test_source", "source_url": "https://example.org/book",
         "retrieved_on": "2026-10-09", "license": "PD-US", "pd_basis": "us_published_before_1930",
         "published_year": 1931,
@@ -216,7 +216,7 @@ CASES = [
         "verified_by": "poetry-tree",
     }, False, "卒年 1969"),
 
-    ("⑧ 通过：原诗 PD + 老译本 PD（1929 出版 / 卒 1945）", {
+    ("⑧ 通过：原诗 PD + 老译本 PD（卒 1945）", {
         "source_id": "pd_test_source", "source_url": "https://example.org/rubaiyat",
         "retrieved_on": "2026-10-09", "license": "PD-US", "pd_basis": "author_death_70",
         "death_year": 1945,
@@ -225,16 +225,45 @@ CASES = [
     }, True, ""),
 ]
 
-# 自测专用的「已核实公有领域来源」——只存在于测试中，不污染登记表
-TEST_SOURCE = {
+# ---------------------------------------------------------------------------
+# 自测必须**自足**：只使用下面的测试桩，绝不读真实登记表。
+#
+# 教训：原来用例③直接引用登记表里的 gutenberg，期望它 license_checked=false。
+# 等我真的去核了 Gutenberg 授权、把它置为 true 之后，③就失败了 ——
+# 测试被真实数据的状态绑住，一变就红。测试要用自己的桩，才能稳定表达规则本身。
+# ---------------------------------------------------------------------------
+FIXTURES = {
+    "mit_test_source": {
+        "name": "测试用 MIT 来源", "homepage": "https://example.org",
+        "license": "MIT", "license_url": "https://example.org/LICENSE",
+        "rights_holder": "Test Rights Holder", "license_checked": True,
+        "checked_on": "2026-10-09", "checked_evidence": "测试桩：已核实的 MIT 来源",
+        "attribution_required": True, "commercial_ok": True, "share_alike": False,
+    },
+    "unverified_test_source": {
+        "name": "测试用未核实来源", "homepage": "https://example.org",
+        "license": "PD-US", "license_url": "https://example.org/copyright",
+        "rights_holder": "various", "license_checked": False,
+        "checked_on": None, "checked_evidence": None,
+        "attribution_required": False, "commercial_ok": True, "share_alike": False,
+    },
     "pd_test_source": {
         "name": "测试用 PD 来源", "homepage": "https://example.org",
         "license": "PD-US", "license_url": "https://example.org/copyright",
         "rights_holder": "various", "license_checked": True, "checked_on": "2026-10-09",
         "checked_evidence": "测试桩：模拟一个已核实为公有领域的来源",
         "attribution_required": False, "commercial_ok": True, "share_alike": False,
-    }
+    },
+    "blocked_test_source": {
+        "name": "测试用被禁来源", "homepage": "https://example.org",
+        "license": "GPL-3.0", "license_url": "https://example.org/LICENSE",
+        "rights_holder": "someone", "license_checked": True, "checked_on": "2026-10-09",
+        "checked_evidence": "测试桩：模拟一个 GPL-3.0 且已标记禁用的来源",
+        "attribution_required": True, "commercial_ok": True, "share_alike": True,
+        "blocked": True, "blocked_reason": "测试桩：GPL-3.0 项目的产物，本项目不使用",
+    },
 }
+
 
 
 def translator_trap_demo(year: int = CURRENT_YEAR) -> list[str]:
@@ -295,7 +324,7 @@ def main():
     if a.selftest:
         print("授权闸门自测\n" + "=" * 62)
         bad = 0
-        src_test = {**src, **TEST_SOURCE}      # 注入测试桩来源
+        src_test = dict(FIXTURES)              # 只用测试桩，不读真实登记表（保证自足）
         for name, rec, want_pass, kw in CASES:
             problems = validate_rights(rec, src_test)
             got_pass = not problems
