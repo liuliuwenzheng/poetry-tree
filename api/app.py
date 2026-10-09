@@ -20,6 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.config import Settings
 from api.graphql_api import make_graphql_router
+from api.models import FilterError
 from api.rest import make_router
 from api.rights import RightsRegistry
 from api.storage import SqliteStore
@@ -125,6 +126,31 @@ def create_app(settings: Settings | None = None, *, auto_audit: bool = True) -> 
         loc = ".".join(str(x) for x in first.get("loc", []) if x != "query")
         return _err("bad_request", f"参数 {loc or '?'} 不对：{first.get('msg', '')}",
                     "看 /docs 里的参数说明")
+
+    # 筛选值不存在 —— 专门接住，因为要带上「可选值」和提示，别退化成普通的 400。
+    # 这条存在的意义：区分「值写错了」和「这个组合没有作品」，两者都是 0 条结果，
+    # 但前者必须让调用方知道是自己错了（否则他会以为库里没有这种诗）。
+    @app.exception_handler(FilterError)
+    async def _filter_err(request: Request, exc: FilterError):
+        body: dict = {"code": "unknown_filter_value", "message": exc.message}
+        if exc.axis:
+            body["axis"] = exc.axis
+        if exc.value is not None:
+            body["value"] = exc.value
+        if exc.valid:
+            body["valid"] = exc.valid
+        if exc.hint:
+            body["hint"] = exc.hint
+        return JSONResponse(status_code=400, content={"error": body})
+
+    @app.exception_handler(UnicodeDecodeError)
+    async def _decode_err(request: Request, exc: UnicodeDecodeError):
+        # 请求体不是合法 UTF-8（Windows 的 curl 会把中文按本地代码页编码后发出）。
+        # 别把 Python 的裸编解码错误丢给用户 —— 那等于什么都没说。
+        return _err("bad_request", "请求体不是合法的 UTF-8",
+                    "中文请以 UTF-8 发送。Windows 上的 curl 会按本地代码页（GBK）"
+                    "编码参数与请求体，是这个问题最常见的成因 —— "
+                    "改用 Python/JS 客户端，或先自行转成 UTF-8 字节。")
 
     @app.exception_handler(ValueError)
     async def _value_err(request: Request, exc: ValueError):

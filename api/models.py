@@ -187,3 +187,32 @@ class Stats(BaseModel):
     by_genre: dict[str, int] = Field(default_factory=dict)
     by_dynasty: dict[str, int] = Field(default_factory=dict)
     by_source: dict[str, int] = Field(default_factory=dict)
+
+
+class FilterError(ValueError):
+    """筛选用了一个**库里根本不存在的值** —— 这不等于「这个条件下没有作品」。
+
+    两者在接口上都是「0 条结果」，但原因完全不同：
+
+    | 情形 | 正确答案 |
+    |---|---|
+    | 值不存在（拼错 / 中文参数没做 URL 编码） | **报错并给出可选值** —— 调用方写错了 |
+    | 值存在，但这个组合没有作品（明 × 诗经） | **返回空页** —— 合法查询，空就是答案 |
+
+    混为一谈的后果是实测出来的：Windows 上 `curl --data-urlencode 'genre=词'`
+    会把中文按本地代码页送出去，服务端收到乱码，于是**安静地返回 0 条**。
+    用户看到的是「一首宋词都没有」—— 一个假结论，而且他没有任何线索知道
+    是自己参数传错了。**这跟「搜不到 vs 不存在」是同一个病。**
+
+    继承 `ValueError`，所以即使没被专门处理，也会落到「400 + 说明」的兜底路径上。
+    """
+
+    def __init__(self, message: str, *, axis: Optional[str] = None,
+                 value: Optional[str] = None, valid: Optional[list[str]] = None,
+                 hint: Optional[str] = None):
+        super().__init__(message)
+        self.message = message
+        self.axis = axis
+        self.value = value
+        self.valid = valid
+        self.hint = hint

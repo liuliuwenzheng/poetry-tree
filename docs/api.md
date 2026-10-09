@@ -274,12 +274,66 @@ curl ".../poems?author=陶潜"      # 151 首 —— 完全一致
 | 状态码 | `code` | 什么时候 |
 |---|---|---|
 | 400 | `bad_request` | 参数错了（游标、script、limit 超限…） |
+| 400 | `unknown_filter_value` | **筛选值在这份数据里根本不存在**（见下） |
 | 404 | `not_found` | id 不存在，或筛选条件下**确实没有**结果 |
 | 409 | `capability_missing` | 这个库没有该能力（比如没建词牌列却按 `tune` 查） |
 | 500 | `internal_error` | 服务端错误 |
 
 > `random` 在筛选无结果时返回 **404 + hint**，不返回别的诗。
 > 「悄悄地给你一首不相干的」比报错糟糕得多。
+
+#### 「值不存在」和「组合为空」是两件事
+
+两者都是「0 条结果」，但必须分得开 —— **否则调用方会得出一个假结论**：
+
+| 情形 | 返回 | 为什么 |
+|---|---|---|
+| `?genre=词词`（库里没这个体裁） | **400 `unknown_filter_value`** + `valid` 可选值 | 是**调用方写错了**。静静返回空，他会以为「一首宋词都没有」 |
+| `?dynasty=明&genre=诗经`（值都对，但没这个组合） | **200 空页** | 合法查询，空就是正确答案 |
+
+```json
+{"error": {
+  "code": "unknown_filter_value",
+  "axis": "genre", "value": "词词",
+  "valid": ["诗", "词", "曲", "诗经", "楚辞", "论语", "蒙学", "四书五经", "其他"],
+  "hint": "可选值：……。另外注意中文参数需要 URL 编码……"
+}}
+```
+
+`author` 走同一套：查不到人不是空结果，是 400，并提示库里按**本名**存
+（陶渊明→陶潜），可用 `/authors/resolve` 解析别名。
+
+#### ⚠️ Windows 上 curl 发中文的坑（实测，不是理论）
+
+**`curl --data-urlencode 'genre=词'` 在 Windows 上会把中文按本地代码页（GBK）发出去。**
+实测「词」被发成 `%B4%CA`（GBK 字节），服务端解出来的不是 UTF-8 的「词」，
+于是参数对不上 —— 改之前这里会**安静地返回 0 条**，用的人只会认为「接口坏了」。
+
+现在接口会**认出这是编码问题**（而不是拼写问题）并明说：
+
+```
+400 unknown_filter_value
+message: genre 参数没能正确解码 —— 送进来的是非法 UTF-8 字节
+hint:    这不是拼写问题，是编码问题。请以 UTF-8 发送中文并做 URL 编码
+         （如 genre=%E8%AF%8D）。Windows 上的 curl 会按本地代码页（GBK）编码参数……
+```
+
+三种正确的发法，任选：
+
+```bash
+# ① 显式写 UTF-8 百分号编码（curl 下最省事）
+curl "http://127.0.0.1:8710/api/v1/poems?genre=%E8%AF%8D&dynasty=%E5%AE%8B"
+
+# ② Python —— 自己控制编码，最稳
+python -c "import urllib.parse,urllib.request,json; \
+  u='http://127.0.0.1:8710/api/v1/poems?'+urllib.parse.urlencode({'genre':'词'}); \
+  print(json.load(urllib.request.urlopen(u))['total'])"
+
+# ③ 本仓库的 SDK —— 编码交给它
+```
+
+请求体同理：`POST /graphql` 的 body 不是合法 UTF-8 时，返回
+`400 bad_request` +「请求体不是合法的 UTF-8」，**而不是把 Python 的裸编解码错误丢给你**。
 
 ---
 

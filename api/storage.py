@@ -19,8 +19,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from api.models import (Author, AuthorRef, Dynasty, Form, Genre, Page, Poem,
-                        Rights, SearchHit, Stats, Translation, Tune)
+from api.models import (Author, AuthorRef, Dynasty, FilterError, Form, Genre,
+                        Page, Poem, Rights, SearchHit, Stats, Translation, Tune)
 
 try:
     import zhconv
@@ -480,37 +480,96 @@ class SqliteStore:
             hit.append(src)
         return hit
 
+    def _dim_names(self, table: str, script: str) -> list[str]:
+        by_name, _ = self._dim_cache(table, script)
+        return sorted(by_name)
+
+    def _unknown_axis(self, axis: str, value: str, table: str,
+                      script: str) -> FilterError:
+        """轴上的名字认不出来 —— 抛错，绝不给一个骗人的空结果。
+
+        `_dim_id` 认不出时返回 None，上层原本当成「没有匹配的作品」返回空页。
+        于是**「名字打错了」和「这个组合真的没有作品」在接口看来一模一样**。
+        实测踩到过：Windows 上的 curl 把中文按本地代码页发出去，服务端收到乱码，
+        `genre=词` 返回 **0 条** —— 用户看到的是「一首宋词都没有」。
+
+        所以这里必须分清：**值不存在 → 报错；值存在但组合为空 → 空页。**
+        """
+        names = self._dim_names(table, script)
+        shown = names[:40]
+        if "\ufffd" in value:
+            # 参数里已经出现替换字符（U+FFFD）＝ 送进来的根本不是合法 UTF-8。
+            # 这时候谈「拼写」是答错方向：100% 是编码问题。
+            return FilterError(
+                f"{axis} 参数没能正确解码 —— 送进来的是非法 UTF-8 字节",
+                axis=axis, value=value, valid=shown,
+                hint="这不是拼写问题，是编码问题。请以 UTF-8 发送中文并做 URL 编码"
+                     "（如 genre=%E8%AF%8D）。Windows 上的 curl 会按本地代码页（GBK）"
+                     "编码参数，这是最常见的成因 —— 换 Python/JS 客户端，"
+                     "或显式写 %-编码。")
+        tail = (f"（共 {len(names)} 个，此处列前 {len(shown)} 个）"
+                if len(names) > len(shown) else "")
+        return FilterError(
+            f"{axis}「{value}」不在这份数据里",
+            axis=axis, value=value, valid=shown,
+            hint=f"可选值{tail}：{'、'.join(shown)}。"
+                 f"另外注意中文参数需要 URL 编码 —— curl 在 Windows 上会按本地代码页"
+                 f"发送中文，导致参数变成乱码、结果为空；"
+                 f"请用显式 %-编码（如 genre=%E8%AF%8D）或 Python/JS 客户端。",
+        )
+
+    def _tune_exists(self, tune: str, script: str) -> bool:
+        # tune 上有索引，这条很便宜（不用全表扫）
+        return bool(self._rows(f"SELECT 1 FROM poems_{script} WHERE tune = ? LIMIT 1",
+                              (tune,)))
+
     def _poem_where(self, q: PoemQuery, script: str):
         where, args = [], []
         if q.dynasty:
             did = self._dim_id("dynasties", script, q.dynasty)
             if did is None:
-                return None, []
+                raise self._unknown_axis("dynasty", q.dynasty, "dynasties", script)
             where.append("p.dynasty_id = ?")
             args.append(did)
         if q.genre:
             if not self.caps.genres:
-                return None, []
+                raise FilterError("这个库没有体裁轴，无法按 genre 过滤",
+                                  axis="genre", value=q.genre,
+                                  hint="用百川 v0.3.0+ 的库（含 genres_* 表）")
             gid = self._dim_id("genres", script, q.genre)
             if gid is None:
-                return None, []
+                raise self._unknown_axis("genre", q.genre, "genres", script)
             where.append("p.genre_id = ?")
             args.append(gid)
         if q.form:
             fid = self._dim_id("poetry_types", script, q.form)
             if fid is None:
-                return None, []
+                raise self._unknown_axis("form", q.form, "poetry_types", script)
             where.append("p.type_id = ?")
             args.append(fid)
         if q.tune:
             if not self.caps.tune:
-                return None, []
+                raise FilterError("这个库没有词牌列，无法按 tune 过滤",
+                                  axis="tune", value=q.tune,
+                                  hint="用百川 v0.3.0+ 的库（含 tune 列）")
+            if not self._tune_exists(q.tune, script):
+                raise FilterError(
+                    f"词牌「{q.tune}」在这份数据里没有出现过",
+                    axis="tune", value=q.tune,
+                    hint="可用词牌见 /api/v1/meta/tunes —— 词牌有上千个，"
+                         "这里不列了；注意中文参数需要 URL 编码")
             where.append("p.tune = ?")
             args.append(q.tune)
         if q.author:
             ids = self.author_ids(q.author, script)
             if not ids:
-                return None, []
+                raise FilterError(
+                    f"没有这个作者：{q.author}", axis="author", value=q.author,
+                    hint="库里按**本名**存储（陶渊明→陶潜、李后主→李煜、"
+                         "苏东坡→苏轼、唐伯虎→唐寅、郑板桥→郑燮）。"
+                         "用 /api/v1/authors/resolve?name=… 解析别名，"
+                         "或 /api/v1/authors 看库里怎么写的。"
+                         "另注意中文参数需要 URL 编码")
             where.append(f"p.author_id IN ({','.join('?' * len(ids))})")
             args += ids
         if q.q:

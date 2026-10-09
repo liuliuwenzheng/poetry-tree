@@ -270,9 +270,54 @@ def main(argv=None):
     check(r.status_code == 400, "超大 limit → 400（防拖库）")
     r = c.get("/api/v1/poems/999999999")
     check(r.status_code == 404, "不存在的 id → 404")
+
+    # ---- 「值写错了」和「这个组合没有作品」必须分得开 ----
+    # 两者都是 0 条结果，但前者是调用方错了，必须让他知道；
+    # 否则他会得出「库里没有这种诗」这个假结论。
+    r = c.get("/api/v1/poems", params={"genre": "不存在的体裁"})
+    j = r.json().get("error", {})
+    check(r.status_code == 400 and j.get("code") == "unknown_filter_value",
+          "体裁名写错 → 400 unknown_filter_value（不再静静返回空）", j.get("code"))
+    check(bool(j.get("valid")) and "词" in j["valid"],
+          "    错误里带上可选值，调用方能自己纠正",
+          "、".join((j.get("valid") or [])[:4]))
+    check(bool(j.get("hint")) and "%" in j["hint"],
+          "    提示里说明中文参数要 URL 编码（Windows 的 curl 会传成乱码）")
+
+    r = c.get("/api/v1/poems", params={"author": "查无此人"})
+    j = r.json().get("error", {})
+    check(r.status_code == 400 and j.get("axis") == "author",
+          "作者不存在 → 400，而且提示「库里按本名存、用 resolve 查别名」",
+          (j.get("hint") or "")[:24])
+
+    # 反向断言：合法值 + 空组合 ≠ 错误（防止「矫枉过正」把正常的空结果也报错）
+    r = c.get("/api/v1/poems", params={"dynasty": "明", "genre": "诗经"})
+    check(r.status_code == 200 and r.json()["total"] == 0,
+          "合法但无作品的组合 → 200 空页（不是错误）", f"HTTP {r.status_code}")
+
     r = c.get("/api/v1/poems/random", params={"genre": "不存在的体裁"})
+    check(r.status_code == 400, "随机 + 体裁名写错 → 400（不是 404，因为请求本身不对）")
+    r = c.get("/api/v1/poems/random", params={"dynasty": "明", "genre": "诗经"})
     check(r.status_code == 404 and r.json()["error"].get("hint"),
-          "随机无结果 → 404 且给 hint（不悄悄返回别的诗）")
+          "随机无结果（值合法但没作品）→ 404 且给 hint（不悄悄返回别的诗）")
+
+    # ---- 编码问题要能自己认出来，别让用户去查拼写 ----
+    # Windows 的 curl 会把中文按本地代码页（GBK）发出去，「词」的 GBK 是 %B4%CA。
+    # 服务端拿到非法 UTF-8 字节 → 替换字符。这时正确的回答是「这是编码问题」。
+    r = c.get("/api/v1/poems?genre=%B4%CA&limit=1")
+    j = r.json().get("error", {})
+    check(r.status_code == 400 and "解码" in j.get("message", ""),
+          "GBK 参数 %B4%CA → 400 且明说「编码问题」，不是拼写问题",
+          j.get("message", "")[:26])
+    check("UTF-8" in (j.get("hint") or ""),
+          "    提示里给出正确的发法（UTF-8 + %-编码）")
+
+    r = c.post("/graphql", content=b'{"query":"{ poems(genre: "\xb2\xca") { total } }"}',
+               headers={"Content-Type": "application/json"})
+    j = r.json().get("error", {})
+    check(r.status_code == 400 and "UTF-8" in j.get("message", ""),
+          "请求体不是 UTF-8 → 400 且给人话（不是 Python 裸编解码错误）",
+          j.get("message", "")[:26])
 
     # ============================================================ C GraphQL
     print("\nC. GraphQL（必须和 REST 答得一样）")
