@@ -80,18 +80,31 @@
 ## 快速开始
 
 ```bash
-# ---- 一、构建/校验数据（授权闸门） ----
+# ---- 〇、装环境（Python ≥ 3.10）----
+git clone https://github.com/liuliuwenzheng/poetry-tree && cd poetry-tree
+pip install -r requirements.txt
+
+# ---- 一、准备数据 ----
+#   接口读的是百川库（99.4 万首，简繁同 id 镜像）。
+#   下载 Release 里的 baichuan.db.gz（481 MB）后解压：
+#     https://github.com/liuliuwenzheng/baichuan-poetry/releases/latest
+gzip -dk baichuan.db.gz                       # → baichuan.db（1.2 GB）
+
+# ---- 二、校验数据的授权闸门 ----
 python corpus/rights.py --selftest                            # 闸门自测 8/8
 python corpus/rights.py --check-source chinese_poetry         # 单来源授权核查
 
-# ---- 二、起接口 ----
-python -m api.serve --db "E:/AI-ku/项目/baichuan-poetry/data/baichuan.db"
+# ---- 三、起接口 ----
+python -m api.serve --db "path/to/baichuan.db"
 
 #   REST 文档  http://127.0.0.1:8710/docs
 #   GraphiQL   http://127.0.0.1:8710/graphql
+#   健康检查   http://127.0.0.1:8710/api/v1/healthz
+#   要让局域网内的别人访问，加 --host 0.0.0.0
 
-# ---- 三、跑接口测试（61 条断言，不需要先起服务）----
+# ---- 四、跑接口测试（70 条断言，不需要先起服务）----
 python -m tests.test_api
+python -m tests.test_api --db other.db       # 换库测（如验证降级路径）
 ```
 
 ```bash

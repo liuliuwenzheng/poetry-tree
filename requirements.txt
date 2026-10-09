@@ -1,0 +1,22 @@
+# 诗文树 Poetry Tree —— 依赖
+#
+#   pip install -r requirements.txt
+#
+# 运行环境：Python ≥ 3.10（代码用了 `str | None`、`list[str]` 这类写法）
+
+# ---- 接口（api/）—— 缺一不可 ----
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.7
+strawberry-graphql>=0.235        # GraphQL 层；REST 与它共用 api/storage.py
+
+# ---- 可选但推荐 ----
+zhconv>=1.4
+#   简繁互认：库里是繁体时也能用简体名字查询（「词」查得到「詞」）。
+#   不装也能跑，只是跨文字版本的名字匹配会失效 —— 会降级，不会报错。
+
+# ---- 测试与开发 ----
+httpx>=0.27
+#   fastapi 的 TestClient 依赖它，跑 tests/test_api.py 需要。
+python-multipart>=0.0.9
+#   GraphQL 的 POST 请求体解析用得上。装上无害。
